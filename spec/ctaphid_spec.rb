@@ -14,7 +14,7 @@ RSpec.describe CtapHid do
 
     response = dev.handle msg
 
-    expect(response[:type]).to eq "init"
+    expect(response[:cmd]).to eq CtapHid::CTAPHID_INIT
     expect(response[:data][0..7]).to eq "\x01\x02\x03\x04\x05\x06\x07\x08".force_encoding("BINARY")
     expect(response[:data][13]).to eq "\xca".force_encoding("BINARY")
     expect(response[:data][14]).to eq "\xfe".force_encoding("BINARY")
@@ -33,7 +33,7 @@ RSpec.describe CtapHid do
 
     response = dev.handle msg
 
-    expect(response[:type]).to eq "error"
+    expect(response[:cmd]).to eq CtapHid::CTAPHID_ERROR
     expect(response[:data]).to eq "\x0b".force_encoding("BINARY")
   end
 
@@ -48,7 +48,7 @@ RSpec.describe CtapHid do
 
     response = dev.handle msg
 
-    expect(response[:type]).to eq "error"
+    expect(response[:cmd]).to eq CtapHid::CTAPHID_ERROR
     expect(response[:data]).to eq "\x0b".force_encoding("BINARY")
   end
 
@@ -74,8 +74,7 @@ RSpec.describe CtapHid do
 
       response = @dev.handle msg
 
-      expect(response[:type]).to eq "cbor"
-      expect(response[:cmd]).to eq 0x10
+      expect(response[:cmd]).to eq CtapHid::CTAPHID_CBOR
       expect(response[:cid]).to eq @cid
       expect(response[:data]).to eq "\x04"
     end
