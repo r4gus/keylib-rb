@@ -1,7 +1,9 @@
 require 'keylib'
 
+Commands = KeyLib::CTAP2::Commands
+StatusCodes = KeyLib::CTAP2::StatusCodes
+
 class KeyLib::CTAP2::Authenticator
-  
   # FIDO version identifiers  
   module Versions 
     # CTAP1/U2F authenticators
@@ -15,15 +17,25 @@ class KeyLib::CTAP2::Authenticator
     # CTAP2.2/FIDO2/WebAuthn authenticators
     FIDO_2_2 = "FIDO_2_2"
   end
-
+  
+  # Some default transport values.
   module Transport
     USB = "usb"
     NFC = "nfc"
     BLE = "ble"
     INTERNAL = "internal"
   end
-
+  
+  # Some default signature algorithms.
+  #
+  # The given algorithm maps are for example returned by
+  # authenticatorGetInfo. You can also use you own algorithms
+  # just make sure that you adhere to the structure defined
+  # in https://w3c.github.io/webauthn/#dictionary-credential-params.
+  #
+  # A list of COSE identifiers can be found here: https://www.iana.org/assignments/cose/cose.xhtml#algorithms.
   module Algorithm
+    # ECDSA P-256 signature algorithm
     ES256 = {
       type: "public-key",
       alg: -7,
@@ -48,13 +60,56 @@ class KeyLib::CTAP2::Authenticator
     algorithms: [Algorithm::ES256],
   }
 
+  DEFAULT_CTAP2_CALLBACKS = {
+  }
+
   def initialize(
-    settings = DEFAULT_SETTINGS
+    settings = DEFAULT_SETTINGS,
+    ctap2_callbacks = DEFAULT_CTAP2_CALLBACKS
   )
     @settings = settings
+    @ctap2_callbacks = ctap2_callbacks
   end
   
-  # Return information about the authenticators capabilities.
+  # Handle CTAP2 CBOR command
+  #
+  # @param [String] request (CTAP command code || cbor data)
+  # @return [String] status code || cbor data
+  def cbor(request)
+    return error StatusCodes::CTAP1_ERR_OTHER if not request.is_a?(String)
+    return error StatusCodes::CTAP1_ERR_INVALID_LENGTH if request.length == 0
+    command_byte = request.getbyte(0)
+    cbor_data = request[1..]
+    
+    if request.length > 1
+      begin
+        decoded_data = KeyLib::Cbor.decode cbor_data 
+      rescue StandardError
+        return error StatusCodes::CTAP2_ERR_INVALID_CBOR
+      end
+    else
+      decoded_data = {}
+    end
+
+    if command_byte == Commands::GET_INFO
+      "\x00" + get_info
+    elsif @ctap2_callbacks.key?(command_byte)
+      @ctap2_callbacks[command_byte].call(decoded_data)
+    else
+      return error StatusCodes::CTAP1_ERR_INVALID_COMMAND
+    end
+  end
+
+  def error(code)
+    # TODO: add logger
+    [code].pack("C")
+  end
+  
+  # Get information about the authenticators capabilities.
+  #
+  # see: https://fidoalliance.org/specs/fido-v2.2-rd-20230321/fido-client-to-authenticator-protocol-v2.2-rd-20230321.html#authenticatorGetInfo.
+  #
+  # @return [String] CBOR encoded authenticatorGetInfo response structure.
   def get_info
     info = {}
     info[0x01] = @settings[:versions] if @settings.key?(:versions)
