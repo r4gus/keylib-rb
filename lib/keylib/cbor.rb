@@ -25,7 +25,44 @@ class KeyLib::Cbor
     elsif obj.is_a? Array
       obj.reduce(enc 0x80, obj.length) { |raw, v| raw + encode(v) }
     elsif obj.is_a? Hash
-      obj.sort.reduce(enc 0xa0, obj.length) do |raw, v| 
+      # Sort the key-value pairs in lexographical order (usually there
+      # are only Integers and Strings).
+      #
+      # We sort in the following order:
+      # 1. Smaller major type sorts earlier (integer before string)
+      # 2. Shorter string sorts before longer string
+      # 3. the smaller value sorts befor the bigger value
+      sorted = obj.sort do |a, b|
+        if a[0].is_a?(String) and b[0].is_a?(Integer)
+          -1
+        elsif a[0].is_a?(Integer) and b[0].is_a?(String)
+          1
+        elsif a[0].is_a?(String) and b[0].is_a?(String)
+          if a[0].length < b[0].length
+            -1
+          elsif a[0].length > b[0].length
+            1
+          else
+            if a[0] < b[0]
+              -1
+            elsif a[0] == b[0]
+              0
+            else
+              1
+            end
+          end
+        else
+          if a[0] < b[0]
+            -1
+          elsif a[0] == b[0]
+            0
+          else
+            1
+          end
+        end
+      end
+
+      sorted.reduce(enc 0xa0, obj.length) do |raw, v| 
         raw + encode(v[0]) + encode(v[1])
       end
     elsif obj.is_a? TrueClass
